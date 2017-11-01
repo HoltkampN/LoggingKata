@@ -5,6 +5,7 @@ using System.Text;
 using System.Threading.Tasks;
 using log4net;
 using System.IO;
+using Geolocation;
 
 namespace LoggingKata
 {
@@ -16,21 +17,71 @@ namespace LoggingKata
 
         static void Main(string[] args)
         {
-            if (args.Length == 0)
+            Logger.Info("Log initialized");
+            var path = Environment.CurrentDirectory + "\\Taco_Bell-US-AL-Alabama.csv";
+            Logger.Debug("Created csv Path variable");
+
+            var lines = File.ReadAllLines(path);
+            if (lines.Length == 0)
             {
-                Console.WriteLine("You must provide a filename as an argument");
-                Logger.Fatal("Cannot import without filename specified as an argument");
-                return;
+                Logger.Error("cvs file is missing or empty.");
+            }
+            else if (lines.Length == 1)
+            {
+                Logger.Warn("Can't compare, there is only one element");
             }
 
-            Logger.Info("Log initialized");
-            var lines = File.ReadAllLines(args[0]);
             var parser = new TacoParser();
-            var locations = lines.Select(line => parser.Parse(line));
+            Logger.Debug("Initialized our Parser");
+            var locations = lines.Select(line => parser.ParseTacos(line))
+                .OrderBy(loc => loc.Location.Longitude)
+                .ThenBy(loc => loc.Location.Latitude)
+                .ToArray();
 
-            //TODO:  Find the two TacoBells in Alabama that are the furthurest from one another.
-            //HINT:  You'll need two nested forloops
+            ITrackable locationA = null;
+            ITrackable locationB = null;
 
+            double distance = 0;
+            Logger.Info("Comparing distance between locations");
+            foreach (var locA in locations)
+            {
+                //Logger.Debug("Checking origin location.");
+                var origin = new Coordinate
+                {
+                    Latitude = locA.Location.Latitude,
+                    Longitude = locA.Location.Longitude
+                };
+
+                foreach (var locB in locations)
+                {
+                    //Logger.Debug("Checking destination location.");
+                    var destination = new Coordinate
+                    {
+                        Latitude = locB.Location.Latitude,
+                        Longitude = locB.Location.Longitude
+                    };
+                    //Logger.Info("Setting distance between the two points.");
+                    var nDistance = GeoCalculator.GetDistance(origin, destination);
+                    if (nDistance > distance)
+                    {
+                        //Logger.Info("If the new distance was greater than the previous, setting new values.");
+                        locationA = locA;
+                        locationB = locB;
+                        distance = nDistance;
+                    }
+                }
+            }
+            if (locationA == null || locationB == null)
+            {
+                Logger.Error("Failed to find furthest locations.");
+                Console.WriteLine("Failed to find furthest locations.");
+                Console.ReadLine();
+                return;
+            }
+            Logger.Info("Should Consol.WriteLine with furthest values.");
+            Console.WriteLine($"The two Tacobells with the greatest distance are: {locationA.Name} and {locationB.Name}");
+            Console.WriteLine($"These two locations are {distance} miles apart.");
+            Console.ReadLine();
         }
     }
 }
